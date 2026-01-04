@@ -30,7 +30,7 @@ export const CarTable = ({ cars, selectedIds, onToggle, onToggleAll }: Props) =>
               <th className="p-4">Название</th>
               <th className="p-4">Год</th>
               <th className="p-4">Пробег</th>
-              <th className="p-4">VIN (Last 4)</th>
+              <th className="p-4">VIN</th>
               <th className="p-4 text-center">Сайт</th>
             </tr>
           </thead>
