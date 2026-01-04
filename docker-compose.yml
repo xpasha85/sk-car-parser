@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      - TZ=Asia/Vladivostok
+    container_name: sk_parser_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Пробрасываем папку backend внутрь, чтобы код обновлялся без перезагрузки
+      - ./backend:/app
+    env_file:
+      - .env
+    restart: always
