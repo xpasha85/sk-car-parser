@@ -3,6 +3,8 @@ version: '3.8'
 services:
   backend:
     build: ./backend
+    environment:
+      - TZ=Asia/Vladivostok
     container_name: sk_prod_backend
     restart: always
     env_file: .env
