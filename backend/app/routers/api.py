@@ -1,3 +1,4 @@
+import re # <--- Добавили для регулярок
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -9,17 +10,47 @@ from ..models import CarItem, ProcessRequest
 from ..services.parser import fetch_auction_list
 from ..services.processing import process_batch
 from ..services.logger import logger
-# ВАЖНО: Вот эта строка должна содержать все функции
 from ..database import (
     get_messages_by_batch, 
     delete_batch_record, 
     get_all_batches, 
-    get_all_messages, # <--- Было пропущено?
+    get_all_messages,
     clear_database
 )
 
 router = APIRouter(prefix="/api")
 security = HTTPBearer()
+
+# --- ЛОГИКА НОРМАЛИЗАЦИИ ID ---
+def extract_auction_id(raw_input: str) -> str:
+    """
+    Вытаскивает чистый ID аукциона из мусора или ссылок.
+    Поддерживает форматы:
+    1. 2500000375 (Чистый ID)
+    2. .../ExptPaucDetail/2500000375/SR25... (Ссылка на деталь)
+    3. ...?uscrPaucScheId=2500000375&... (Ссылка с параметрами)
+    """
+    # 1. Очищаем от пробелов
+    clean_val = raw_input.strip()
+    
+    # 2. Если это просто число — возвращаем сразу
+    if clean_val.isdigit():
+        return clean_val
+    
+    # 3. Пробуем найти ID в пути ссылки (ExptPaucDetail/ID)
+    # Ищет ExptPaucDetail/ + (группа цифр)
+    detail_match = re.search(r"ExptPaucDetail\/(\d+)", clean_val)
+    if detail_match:
+        return detail_match.group(1)
+        
+    # 4. Пробуем найти ID в параметрах (uscrPaucScheId=ID)
+    param_match = re.search(r"uscrPaucScheId=(\d+)", clean_val)
+    if param_match:
+        return param_match.group(1)
+    
+    # 5. Если ничего не нашли, возвращаем как есть (пусть парсер сам ругается)
+    return clean_val
+# ------------------------------
 
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
@@ -36,9 +67,17 @@ async def check_auth(token: str = Depends(verify_token)):
 
 @router.get("/auction/preview", response_model=List[CarItem])
 async def get_auction_preview(sche_id: str, token: str = Depends(verify_token)):
-    logger.info(f"User requested preview for auction: {sche_id}")
-    items = await fetch_auction_list(sche_id)
-    logger.info(f"Found {len(items)} items for auction {sche_id}")
+    # --- ПРИМЕНЯЕМ ФИЛЬТР ТУТ ---
+    clean_id = extract_auction_id(sche_id)
+    
+    if clean_id != sche_id:
+        logger.info(f"User input normalized: '{sche_id}' -> '{clean_id}'")
+    else:
+        logger.info(f"User requested preview for auction: {clean_id}")
+    # ----------------------------
+
+    items = await fetch_auction_list(clean_id)
+    logger.info(f"Found {len(items)} items for auction {clean_id}")
     return items
 
 @router.post("/process")
